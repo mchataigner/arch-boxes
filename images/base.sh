@@ -30,6 +30,7 @@ Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/bin/pacman-key --init
 ExecStart=/usr/bin/pacman-key --populate
+ExecStart=/usr/bin/systemctl disable systemd-time-wait-sync
 
 [Install]
 WantedBy=multi-user.target
