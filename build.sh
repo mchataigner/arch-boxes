@@ -5,10 +5,10 @@
 # errexit: "Exit immediately if [...] command exits with a non-zero status."
 set -o nounset -o errexit
 shopt -s extglob
-readonly DEFAULT_DISK_SIZE="2G"
+readonly DEFAULT_DISK_SIZE="3G"
 readonly IMAGE="image.img"
 # shellcheck disable=SC2016
-readonly MIRROR='https://geo.mirror.pkgbuild.com/$repo/os/$arch'
+readonly MIRROR='https://mirror.theo546.fr/archlinux/$repo/os/$arch'
 
 function init() {
   readonly ORIG_PWD="${PWD}"
@@ -68,11 +68,21 @@ function bootstrap() {
 [options]
 Architecture = auto
 
+Color
+ParallelDownloads = 10
+
 [core]
 Include = mirrorlist
 
 [extra]
 Include = mirrorlist
+
+[community]
+Include = mirrorlist
+
+[moot]
+Server = http://3.arch.chataigner.me/moot/os/\$arch
+Server = http://4.arch.chataigner.me/moot/os/\$arch
 EOF
   echo "Server = ${MIRROR}" >mirrorlist
 
@@ -161,12 +171,61 @@ function create_image() {
     btrfs filesystem resize max "${MOUNT}"
   fi
 
+  mv "${MOUNT}/etc/pacman.conf" "${MOUNT}/etc/pacman.conf.orig"
+
+  cat <<EOF > "${MOUNT}/etc/locale.gen"
+en_US.UTF-8 UTF-8
+EOF
+  cat <<EOF > "${MOUNT}/etc/locale.conf"
+LANG="en_US.UTF-8"
+EOF
+  arch-chroot "${MOUNT}" /usr/bin/locale-gen
+
+  cat <<EOF >"${MOUNT}/etc/pacman.conf"
+[options]
+Architecture = auto
+HoldPkg     = pacman glibc
+
+Color
+CheckSpace
+ParallelDownloads = 10
+SigLevel = Required DatabaseOptional
+LocalFileSigLevel = Optional
+
+[core]
+Include = /etc/pacman.d/mirrorlist
+
+[extra]
+Include = /etc/pacman.d/mirrorlist
+
+[community]
+Include = /etc/pacman.d/mirrorlist
+
+[moot]
+Server = http://3.arch.chataigner.me/moot/os/\$arch
+Server = http://4.arch.chataigner.me/moot/os/\$arch
+EOF
+
+  cp "${ORIG_PWD}/mirrorlist" "${MOUNT}/etc/pacman.d/mirrorlist"
+
+  cp "${ORIG_PWD}/keyring/moot-revoked" "${MOUNT}/usr/share/pacman/keyrings/"
+  cp "${ORIG_PWD}/keyring/moot-trusted" "${MOUNT}/usr/share/pacman/keyrings/"
+  cp "${ORIG_PWD}/keyring/moot.gpg" "${MOUNT}/usr/share/pacman/keyrings/"
+
+  arch-chroot "${MOUNT}" /usr/bin/pacman-key --init
+
+  arch-chroot "${MOUNT}" /usr/bin/pacman-key --populate archlinux
+  arch-chroot "${MOUNT}" /usr/bin/pacman-key --populate moot
+
   if [ 0 -lt "${#PACKAGES[@]}" ]; then
     arch-chroot "${MOUNT}" /usr/bin/pacman -S --noconfirm "${PACKAGES[@]}"
   fi
+  echo "package success"
   if [ 0 -lt "${#SERVICES[@]}" ]; then
     arch-chroot "${MOUNT}" /usr/bin/systemctl enable "${SERVICES[@]}"
   fi
+  echo "service success"
+
   "${2}"
   image_cleanup
   unmount_image
