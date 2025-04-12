@@ -71,13 +71,16 @@ Architecture = auto
 Color
 ParallelDownloads = 10
 
+[core-testing]
+Include = mirrorlist
+
 [core]
 Include = mirrorlist
 
-[extra]
+[extra-testing]
 Include = mirrorlist
 
-[community]
+[extra]
 Include = mirrorlist
 
 [moot]
